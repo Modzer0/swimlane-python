@@ -144,8 +144,8 @@ The newly created record is returned from the create create call after first bei
     })
 
 
-Batch Record Creation
-^^^^^^^^^^^^^^^^^^^^^
+Bulk Record Create
+^^^^^^^^^^^^^^^^^^
 
 Creating multiple records at once can also done withe the :obj:`app.records` adapter using only a single request.
 
@@ -153,15 +153,23 @@ Any records not passing validation will cause the entire operation to fail.
 
 .. code-block:: python
 
-    records = app.records.create_batch(
+    records = app.records.bulk_create(
         {'Text Field': 'Value 1', 'Numeric Field': 10, ...},
         {'Text Field': 'Value 2', 'Numeric Field': 20, ...},
         ...
     )
 
+.. note::
 
-Batch Record Delete
-^^^^^^^^^^^^^^^^^^^
+    .. versionchanged:: 2.17.0
+        Method was renamed from `create_batch()` -> `bulk_create()`
+
+
+    `create_batch()` will be removed in next major release.
+
+
+Bulk Record Delete
+^^^^^^^^^^^^^^^^^^
 Delete multiple records at once.
 
 .. code-block:: python
@@ -178,11 +186,40 @@ Delete multiple records at once by filters using filter format from search.
 .. code-block:: python
 
     # Delete by filter
-    records = app.records.batch_delete(
+    records = app.records.bulk_delete(
         ('Field_1', 'equals', value1),
         ('Field_2', 'equals', value2)
     )
 
+Bulk Record Modify
+^^^^^^^^^^^^^^^^^^^
+
+Bulk modify records by list of Record instances. Invalid function inputs will cause entire operation to fail.
+
+.. code-block:: python
+
+    # List of all records in app
+    record1 = app.records.get(tracking_id='APP-1')
+    record2 = app.records.get(tracking_id='APP-2')
+    record3 = app.records.get(tracking_id='APP-3')
+
+    app.records.bulk_modify(record1, record2, record3, values={"Field_Name": new_value})
+
+Bulk modify records by filter tuples. Invalid function inputs will cause entire operation to fail.
+
+.. code-block:: python
+
+    # Modify by filter(s)
+    app.records.bulk_modify(
+        # Query filters
+        ("Text Field", "equals", "Value"),
+        ("Number Field", "equals", 2),
+        # New values for records
+        values={
+            "Field_Name": "New Value",
+            "Numeric Field": 10
+        }
+    )
 
 Record
 ------

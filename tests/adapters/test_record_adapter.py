@@ -1,4 +1,5 @@
 import numbers
+import warnings
 
 import mock
 import pytest
@@ -14,6 +15,7 @@ def test_get(mock_swimlane, mock_app, mock_record):
 
     with mock.patch.object(mock_swimlane, 'request', return_value=mock_response):
         assert mock_app.records.get(id='record_id') == mock_record
+
 
 def test_get_by_tracking_id(mock_swimlane, mock_app, mock_record):
     mock_response = mock.MagicMock()
@@ -62,13 +64,24 @@ def test_create(mock_swimlane, mock_app, mock_record):
     ([{'Status': 'Open'}], None),
     ([{'Status': 'Open'}, {'Status': 'Open'}], None)
 ])
-def test_create_batch(mock_app, records, expected):
+def test_bulk_create(mock_app, records, expected):
     if expected is not None:
         with pytest.raises(expected):
-            mock_app.records.create_batch(*records)
+            mock_app.records.bulk_create(*records)
 
     else:
-        mock_app.records.create_batch(*records)
+        mock_app.records.bulk_create(*records)
+
+
+def test_create_batch_deprecated(mock_app):
+    """Verify DeprecationWarning is emitted for create_batch method"""
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always")
+        mock_app.records.create_batch({}, {})
+
+        assert len(caught_warnings) == 1
+        assert issubclass(caught_warnings[-1].category, DeprecationWarning)
+        assert "create_batch" in str(caught_warnings[-1].message)
 
 
 def test_search(mock_swimlane, mock_app, mock_record):
@@ -118,8 +131,6 @@ def test_search(mock_swimlane, mock_app, mock_record):
 
 
 def test_bulk_delete(mock_swimlane, mock_app, mock_record):
-
-
     # test that requests is called with proper object for filters
     with mock.patch.object(mock_swimlane, 'request', return_value=None) as mock_func:
         mock_app.records.bulk_delete(('Numeric', 'equals', 1))
@@ -154,4 +165,59 @@ def test_filters_or_records_validation(mock_record):
     #
     with pytest.raises(ValueError):
         validate_filters_or_records([mock_record, ('Number', 'equals', 1)])
+
+
+def test_bulk_modify_by_filter(mock_swimlane, mock_app):
+    """Test bulk modify by filter tuples updates records"""
+    # patch swimlane.requests method to assert_called_once_with
+    with mock.patch.object(mock_swimlane, 'request', return_value=None) as mock_func:
+        mock_app.records.bulk_modify(('Numeric', 'equals', 1), values={'Numeric': 2})
+    mock_func.assert_called_once_with('put', "app/{0}/record/batch".format(mock_app.id), json=
+        {'filters': [{
+                'fieldId': 'aqkg3', 'filterType': 'equals', 'value': 1
+            }],
+            'modifications': [{
+                    'fieldId': {
+                        'type': 'Id',
+                        'value': 'aqkg3'
+                    },
+                    'type': 'Create', 'value': 2
+                }]
+        }
+    )
+
+
+def test_bulk_modify_by_record(mock_swimlane, mock_app, mock_record):
+    """Test bulk modify by record/list of records"""
+    # patch swimlane.requests method to assert_called_once_with
+    with mock.patch.object(mock_swimlane, 'request', return_value=None) as mock_func:
+        mock_app.records.bulk_modify(mock_record, values={'Numeric': 2})
+    mock_func.assert_called_once_with('put', "app/{0}/record/batch".format(mock_app.id), json=
+        {'modifications': [{
+            'fieldId': {
+                'type': 'Id', 'value': 'aqkg3'
+            },
+            'type': 'Create', 'value': 2
+        }],
+            'recordIds': ['58ebb22807637a02d4a14bd6']
+        }
+    )
+    # Ensure record field is being set
+    assert mock_record['Numeric'] == 2
+
+
+def test_bulk_modify_errors(mock_app, mock_record):
+    """Test bulk modify for expected ValueError on invalid inputs"""
+    # ValueError when passing in combination of filter tuples and records
+    with pytest.raises(ValueError):
+        mock_app.records.bulk_modify(mock_record, ('Numeric', 'equals', 1), values={'Numeric': 2})
+    # ValueError when values kwarg is missing
+    with pytest.raises(ValueError):
+        mock_app.records.bulk_modify(mock_record, 2)
+    # ValueError when values is not dict
+    with pytest.raises(ValueError):
+        mock_app.records.bulk_modify(mock_record, values=2)
+    # ValueError when additional kwargs beyond values
+    with pytest.raises(ValueError):
+        mock_app.records.bulk_modify(mock_record, values={}, other_val={})
 
