@@ -45,19 +45,24 @@ class MultiSelectField(CursorField):
         return self._get()
 
     def get_swimlane(self):
+        """Handle multi-select and single-select modes"""
         if self.multiselect:
             value = self._get()
             children = []
+            if value:
+                for child in value:
+                    children.append(self.cast_to_swimlane(child))
 
-            for child in value:
-                children.append(self.cast_to_swimlane(child))
-
-            return children
-
+                return children
+            return None
         return super(MultiSelectField, self).get_swimlane()
 
     def _set(self, value):
-        """Expect single instance of supported_types or iterable of instances of supported_types when multi-select"""
+        """Override to treat empty lists as None"""
+        return super(MultiSelectField, self)._set(value or None)
+
+    def set_python(self, value):
+        """Override to remove key from raw data when empty to work with server 2.16+ validation"""
         if self.multiselect:
             value = value or []
             elements = []
@@ -70,16 +75,10 @@ class MultiSelectField(CursorField):
         else:
             self.validate_value(value)
 
-        super(MultiSelectField, self)._set(value)
-
-    def set_python(self, value):
-        """Override to remove key from raw data when empty to work with server 2.16+ validation"""
         self._set(value)
 
-        if self.multiselect and not self._value:
-            self.record._raw['values'].pop(self.id, None)
-
     def set_swimlane(self, value):
+        """Cast all multi-select elements to correct internal type like single-select mode"""
         if self.multiselect:
             value = value or []
             children = []

@@ -85,9 +85,6 @@ class Record(APIResource):
     def __hash__(self):
         return hash((self.id, self.app))
 
-    def __eq__(self, other):
-        return isinstance(other, self.__class__) and hash(self) == hash(other)
-
     def __lt__(self, other):
         if not isinstance(other, self.__class__):
             raise TypeError("Comparisons not supported between instances of '{}' and '{}'".format(
@@ -172,12 +169,20 @@ class Record(APIResource):
         else:
             method = 'put'
 
+        # Pop off fields with None value to allow for saving empty fields
+        copy_raw = copy.copy(self._raw)
+        values_dict = {}
+        for key, value in six.iteritems(copy_raw['values']):
+            if value is not None:
+                values_dict[key] = value
+        copy_raw['values'] = values_dict
+
         self.validate()
 
         response = self._swimlane.request(
             method,
             'app/{}/record'.format(self.app.id),
-            json=self._raw
+            json=copy_raw
         )
 
         # Reinitialize record with new raw content returned from server to update any calculated fields
@@ -310,5 +315,13 @@ def record_factory(app, fields=None):
 
     for name, value in six.iteritems(fields):
         record[name] = value
+
+    # Pop off fields with None value to allow for saving empty fields
+    copy_raw = copy.copy(record._raw)
+    values_dict = {}
+    for key, value in six.iteritems(copy_raw['values']):
+        if value is not None:
+            values_dict[key] = value
+    record._raw['values'] = values_dict
 
     return record
