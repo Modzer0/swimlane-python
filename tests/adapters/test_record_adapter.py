@@ -130,6 +130,58 @@ def test_search(mock_swimlane, mock_app, mock_record):
             assert mock_app.records.search(('Tracking Id', 'equals', 'RA-7')) == [mock_record]
 
 
+def test_search_raw(mock_swimlane, mock_app, mock_record):
+    """Test search_raw returns raw dictionaries instead of Record objects"""
+    # Run first to cache swimlane user
+    with mock.patch.object(mock_swimlane._session, 'request') as mock_request:
+        mock_response = mock.MagicMock()
+        mock_response.json.return_value = [{
+            '$type': 'Core.Models.Identity.ApplicationUser, Core',
+            'active': False,
+            'createdByUser': {'$type': 'Core.Models.Utilities.UserGroupSelection, Core'},
+            'createdDate': '2017-03-31T09:10:52.717Z',
+            'disabled': False,
+            'displayName': 'admin',
+            'groups': [],
+            'id': '58de1d1c07637a0264c0ca6a',
+            'isAdmin': True,
+            'isMe': False,
+            'lastLogin': '2017-04-27T14:11:38.54Z',
+            'lastPasswordChangedDate': '2017-03-31T09:10:52.536Z',
+            'modifiedByUser': {'$type': 'Core.Models.Utilities.UserGroupSelection, Core'},
+            'modifiedDate': '2017-03-31T09:10:52.76Z',
+            'name': 'admin',
+            'passwordComplexityScore': 3,
+            'passwordHash': 'AQAAAAEAACcQAAAAEESp9LR0jN3qPF2fw5qWdyceYxbeBbawMW5AFt31dA5n3xX16MFJWsU/j82heenFww==',
+            'passwordResetRequired': False,
+            'roles': [],
+            'userName': 'admin'}]
+
+        mock_request.return_value = mock_response
+
+        # Access property to ensure call
+        user = mock_swimlane.user
+
+    mock_response = mock.MagicMock()
+    mock_response.json.return_value = {
+        '$type': 'API.Models.Search.GroupedSearchResults, API',
+        'count': 1,
+        'limit': 50,
+        'offset': 0,
+        'results': {
+            '$type': 'System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[Core.Models.Record.Record[], Core]], mscorlib',
+            '58e4bb4407637a0e4c4f9873': [mock_record._raw]}}
+
+    with mock.patch.object(mock_swimlane, 'request', return_value=mock_response):
+        raw_results = mock_app.records.search_raw(('Tracking Id', 'equals', 'RA-7'))
+
+        # Should return list of dictionaries, not Record objects
+        assert isinstance(raw_results, list)
+        assert len(raw_results) == 1
+        assert isinstance(raw_results[0], dict)
+        assert raw_results[0] == mock_record._raw
+
+
 def test_bulk_delete(mock_swimlane, mock_app, mock_record):
     # test that requests is called with proper object for filters
     with mock.patch.object(mock_swimlane, 'request') as mock_func:

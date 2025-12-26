@@ -98,6 +98,87 @@ class RecordAdapter(AppResolver):
 
         return list(report)
 
+    def search_raw(self, *filters, **kwargs):
+        """Shortcut to search and return raw JSON data before converting to Record objects
+
+        Args:
+            *filters (tuple): Zero or more filter tuples of (field_name, operator, field_value)
+
+        Keyword Args:
+            keywords (list(str)): List of strings of keywords to use in report search
+            limit (int): Set maximum number of returned raw records, defaults to `Report.default_limit`. Set to 0 to
+                return all records
+
+        Notes:
+            Similar to :meth:`search` but returns raw JSON dictionaries instead of Record instances.
+
+            Useful for performance when you don't need full Record objects, or when you want to access
+            the raw API response data.
+
+            All provided filters are AND'ed together
+
+            Filter operators are available as constants in `swimlane.core.search`
+
+        Examples:
+
+            ::
+
+                # Return raw data matching filters
+
+                from swimlane.core import search
+
+                raw_records = app.records.search_raw(
+                    ('field_name', 'equals', 'field_value'),
+                    ('other_field', search.NOT_EQ, 'value')
+                )
+
+                for raw_record in raw_records:
+                    print(raw_record['id'])
+
+            ::
+
+                # Run keyword search with multiple keywords
+                raw_records = app.records.search_raw(keywords=['example', 'test'])
+
+            ::
+
+                # Return all raw records from app
+                raw_records = app.records.search_raw(limit=0)
+
+        Returns:
+            :class:`list` of :class:`dict`: List of raw record dictionaries returned from the search results
+        """
+        import itertools
+
+        report = self._app.reports.build(
+            'search-raw-' + random_string(8),
+            keywords=kwargs.pop('keywords', []),
+            limit=kwargs.pop('limit', Report.default_limit)
+        )
+
+        for filter_tuples in filters:
+            report.filter(*filter_tuples)
+
+        # Manually retrieve raw data without converting to Record objects
+        raw_results = []
+        limit = report._PaginatedCursor__limit
+
+        for page in itertools.count():
+            raw_elements = report._retrieve_raw_elements(page)
+
+            for raw_element in raw_elements:
+                raw_results.append(raw_element)
+                if limit and len(raw_results) >= limit:
+                    break
+
+            if any([
+                len(raw_elements) < report.page_size,
+                (limit and len(raw_results) >= limit)
+            ]):
+                break
+
+        return raw_results
+
     def create(self, **fields):
         """Create and return a new record in associated app and return the newly created Record instance
 
